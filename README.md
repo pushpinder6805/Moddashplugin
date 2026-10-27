@@ -38,6 +38,10 @@ later pages. Retry preserves already visible resources; changing tabs cancels ol
 loads. Staff ordering is stored in Discourse's plugin store, not the admin-only theme
 settings endpoint. No user-specific demo content or shared permission cache is used.
 
+## Flow chart
+
+![Project Architecture Diagram](diagram.png)
+
 ## Compatibility and status
 
 The minimum target is Discourse `2026.10.0-latest`. CI follows the official Discourse
