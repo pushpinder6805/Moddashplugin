@@ -64,17 +64,18 @@ RSpec.describe Moddashplugin::LibraryController do
 
   it "returns all topic pages in deterministic creation order without duplicates" do
     sign_in(member)
-    stub_const("Moddashplugin::LibraryQuery::PAGE_SIZE", 2)
-    extra = Fabricate(:topic, category: child, created_at: 1.day.ago)
-    root_topic.update!(created_at: 2.days.ago)
-    child_topic.update!(created_at: 2.days.ago)
-    load_library
-    first = response.parsed_body
-    expect(first["topics"].map { |topic| topic["id"] }).to eq([extra.id, child_topic.id])
-    expect(first["next_cursor"]).to be_present
-    load_library(cursor: first["next_cursor"])
-    expect(response.parsed_body["topics"].map { |topic| topic["id"] }).to eq([root_topic.id])
-    expect(response.parsed_body["next_cursor"]).to be_nil
+    stub_const(Moddashplugin::LibraryQuery, :PAGE_SIZE, 2) do
+      extra = Fabricate(:topic, category: child, created_at: 1.day.ago)
+      root_topic.update!(created_at: 2.days.ago)
+      child_topic.update!(created_at: 2.days.ago)
+      load_library
+      first = response.parsed_body
+      expect(first["topics"].map { |topic| topic["id"] }).to eq([extra.id, child_topic.id])
+      expect(first["next_cursor"]).to be_present
+      load_library(cursor: first["next_cursor"])
+      expect(response.parsed_body["topics"].map { |topic| topic["id"] }).to eq([root_topic.id])
+      expect(response.parsed_body["next_cursor"]).to be_nil
+    end
   end
 
   it "loads a library larger than the real 100-topic page size" do
@@ -94,17 +95,18 @@ RSpec.describe Moddashplugin::LibraryController do
 
   it "does not skip later resources when earlier topics are deleted between pages" do
     sign_in(member)
-    stub_const("Moddashplugin::LibraryQuery::PAGE_SIZE", 1)
-    root_topic.update!(created_at: 2.days.ago)
-    load_library
-    cursor = response.parsed_body["next_cursor"]
-    child_topic.destroy!
-    new_resource = Fabricate(:topic, category: child)
-    load_library(cursor: cursor)
-    expect(response.parsed_body["topics"].map { |topic| topic["id"] }).to eq([root_topic.id])
-    expect(response.parsed_body["topics"].map { |topic| topic["id"] }).not_to include(
-      new_resource.id,
-    )
+    stub_const(Moddashplugin::LibraryQuery, :PAGE_SIZE, 1) do
+      root_topic.update!(created_at: 2.days.ago)
+      load_library
+      cursor = response.parsed_body["next_cursor"]
+      child_topic.destroy!
+      new_resource = Fabricate(:topic, category: child)
+      load_library(cursor: cursor)
+      expect(response.parsed_body["topics"].map { |topic| topic["id"] }).to eq([root_topic.id])
+      expect(response.parsed_body["topics"].map { |topic| topic["id"] }).not_to include(
+        new_resource.id,
+      )
+    end
   end
 
   it "rejects forged cursors" do
@@ -115,14 +117,15 @@ RSpec.describe Moddashplugin::LibraryController do
 
   it "binds cursors to the user, root and search" do
     sign_in(member)
-    stub_const("Moddashplugin::LibraryQuery::PAGE_SIZE", 1)
-    load_library
-    cursor = response.parsed_body["next_cursor"]
-    load_library(cursor: cursor, q: "different")
-    expect(response.status).to eq(400)
-    sign_in(moderator)
-    load_library(cursor: cursor)
-    expect(response.status).to eq(400)
+    stub_const(Moddashplugin::LibraryQuery, :PAGE_SIZE, 1) do
+      load_library
+      cursor = response.parsed_body["next_cursor"]
+      load_library(cursor: cursor, q: "different")
+      expect(response.status).to eq(400)
+      sign_in(moderator)
+      load_library(cursor: cursor)
+      expect(response.status).to eq(400)
+    end
   end
 
   it "rechecks category permissions on subsequent pages" do
@@ -131,18 +134,19 @@ RSpec.describe Moddashplugin::LibraryController do
     secret = Fabricate(:topic, category: private_child, created_at: 3.days.ago)
     group.add(member)
     sign_in(member)
-    stub_const("Moddashplugin::LibraryQuery::PAGE_SIZE", 1)
-    load_library
-    cursor = response.parsed_body["next_cursor"]
-    group.remove(member)
-    ids = []
-    while cursor
-      load_library(cursor: cursor)
-      expect(response.status).to eq(200)
-      ids.concat(response.parsed_body["topics"].map { |topic| topic["id"] })
+    stub_const(Moddashplugin::LibraryQuery, :PAGE_SIZE, 1) do
+      load_library
       cursor = response.parsed_body["next_cursor"]
+      group.remove(member)
+      ids = []
+      while cursor
+        load_library(cursor: cursor)
+        expect(response.status).to eq(200)
+        ids.concat(response.parsed_body["topics"].map { |topic| topic["id"] })
+        cursor = response.parsed_body["next_cursor"]
+      end
+      expect(ids).not_to include(secret.id)
     end
-    expect(ids).not_to include(secret.id)
   end
 
   it "does not leak restricted resources to members or moderators outside their group" do

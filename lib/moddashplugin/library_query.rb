@@ -64,11 +64,11 @@ module ::Moddashplugin
       @topics_scope ||=
         begin
           scope =
-            TopicQuery
-              .new(@guardian.user, guardian: @guardian)
-              .default_results(limit: false, skip_ordering: true, no_definitions: true)
-              .references(:categories)
-              .where(category_id: categories.map(&:id))
+            @guardian.filter_allowed_categories(Topic.listable_topics).where(
+              category_id: categories.map(&:id),
+            )
+          scope = scope.visible unless @guardian.can_see_unlisted_topics?
+          scope = scope.where.not(id: categories.filter_map(&:topic_id))
           # Shared drafts must never appear in the library, even for staff.
           scope = scope.where.not(id: SharedDraft.select(:topic_id))
           scope = scope.where.not(category_id: SiteSetting.shared_drafts_category.to_i)

@@ -68,8 +68,6 @@ jobs:
         working-directory: discourse
     env:
       RAILS_ENV: test
-      # Use Discourse's supported libvips backend on Ubuntu runners.
-      DISCOURSE_ENABLE_VIPS_IMAGE_PROCESSING: 'true'
       LOAD_PLUGINS: '1'
       PGHOST: 127.0.0.1
       PGUSER: discourse
@@ -106,6 +104,17 @@ jobs:
           bundler-cache: true
           working-directory: discourse
       - run: pnpm install --frozen-lockfile
+      - name: ImageMagick build dependencies
+        if: matrix.suite != 'backend'
+        run: sudo apt-get install -y --no-install-recommends libfreetype-dev libfontconfig1-dev libpng-dev libjpeg-dev libwebp-dev
+      - uses: actions/cache@v5
+        if: matrix.suite != 'backend'
+        with:
+          path: ~/.cache/moddashplugin-imagemagick-7.1.2-27.tar.gz
+          key: ubuntu-24.04-imagemagick-7.1.2-27-v1
+      - name: Install Discourse's ImageMagick 7 runtime
+        if: matrix.suite != 'backend'
+        run: bash plugins/moddashplugin/script/ci/install-imagemagick.sh
       - name: Browser dependencies
         if: matrix.suite != 'backend'
         run: pnpm playwright install --with-deps --no-shell chromium
