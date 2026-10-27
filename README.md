@@ -33,8 +33,8 @@ settings endpoint. No user-specific demo content or shared permission cache is u
 
 ## Compatibility and status
 
-The minimum target is Discourse `2026.10.0-latest`. CI runs the official Discourse
-plugin workflow against `7d3d93e083b41f478616fa6447b884a50911187e`, the commit reported
+The minimum target is Discourse `2026.10.0-latest`. CI follows the official Discourse
+plugin workflow and runs against `7d3d93e083b41f478616fa6447b884a50911187e`, the commit reported
 by Medicaid Hub's public login page when development began. That does not replace a
 preview on the site's actual theme and other installed plugins.
 
@@ -92,7 +92,7 @@ Customize → Themes screen.
 
 The repository follows the official
 [Discourse plugin skeleton](https://github.com/discourse/discourse-plugin-skeleton)
-and uses the official reusable CI workflow. CI runs Ruby request specs, QUnit unit
+and adapts the official CI steps with Ruby 3.4 pinned for the site's core revision. CI runs Ruby request specs, QUnit unit
 and rendered-component tests, browser system specs and the core-features regression
 suite, plus Discourse's standard Ruby/JS/SCSS linters.
 

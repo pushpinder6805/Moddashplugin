@@ -21,8 +21,14 @@ RSpec.describe Moddashplugin::LibraryController do
     sign_in(member)
     load_library
     expect(response.status).to eq(200)
-    expect(response.parsed_body["categories"].map { |cat| cat["id"] }).to contain_exactly(root.id, child.id)
-    expect(response.parsed_body["topics"].map { |topic| topic["id"] }).to contain_exactly(root_topic.id, child_topic.id)
+    expect(response.parsed_body["categories"].map { |cat| cat["id"] }).to contain_exactly(
+      root.id,
+      child.id,
+    )
+    expect(response.parsed_body["topics"].map { |topic| topic["id"] }).to contain_exactly(
+      root_topic.id,
+      child_topic.id,
+    )
     expect(response.headers["Cache-Control"]).to include("private", "no-store")
   end
 
@@ -34,7 +40,7 @@ RSpec.describe Moddashplugin::LibraryController do
   end
 
   it "includes every child even when Discourse uses lazy category loading" do
-    SiteSetting.lazy_load_categories = true
+    SiteSetting.lazy_load_categories_groups = Group::AUTO_GROUPS[:everyone].to_s
     children = Fabricate.times(26, :category, parent_category_id: root.id)
     SiteSetting.max_category_nesting = 3
     grandchild = Fabricate(:category, parent_category_id: children.last.id)
@@ -49,18 +55,16 @@ RSpec.describe Moddashplugin::LibraryController do
   it "returns all topic pages in deterministic creation order without duplicates" do
     sign_in(member)
     stub_const("Moddashplugin::LibraryQuery::PAGE_SIZE", 2)
-    begin
-      extra = Fabricate(:topic, category: child, created_at: 1.day.ago)
-      root_topic.update!(created_at: 2.days.ago)
-      child_topic.update!(created_at: 2.days.ago)
-      load_library
-      first = response.parsed_body
-      expect(first["topics"].map { |topic| topic["id"] }).to eq([extra.id, child_topic.id])
-      expect(first["next_cursor"]).to be_present
-      load_library(cursor: first["next_cursor"])
-      expect(response.parsed_body["topics"].map { |topic| topic["id"] }).to eq([root_topic.id])
-      expect(response.parsed_body["next_cursor"]).to be_nil
-    end
+    extra = Fabricate(:topic, category: child, created_at: 1.day.ago)
+    root_topic.update!(created_at: 2.days.ago)
+    child_topic.update!(created_at: 2.days.ago)
+    load_library
+    first = response.parsed_body
+    expect(first["topics"].map { |topic| topic["id"] }).to eq([extra.id, child_topic.id])
+    expect(first["next_cursor"]).to be_present
+    load_library(cursor: first["next_cursor"])
+    expect(response.parsed_body["topics"].map { |topic| topic["id"] }).to eq([root_topic.id])
+    expect(response.parsed_body["next_cursor"]).to be_nil
   end
 
   it "does not skip later resources when earlier topics are deleted between pages" do
@@ -73,7 +77,9 @@ RSpec.describe Moddashplugin::LibraryController do
     new_resource = Fabricate(:topic, category: child)
     load_library(cursor: cursor)
     expect(response.parsed_body["topics"].map { |topic| topic["id"] }).to eq([root_topic.id])
-    expect(response.parsed_body["topics"].map { |topic| topic["id"] }).not_to include(new_resource.id)
+    expect(response.parsed_body["topics"].map { |topic| topic["id"] }).not_to include(
+      new_resource.id,
+    )
   end
 
   it "rejects forged cursors" do
@@ -122,7 +128,9 @@ RSpec.describe Moddashplugin::LibraryController do
       sign_in(user)
       load_library
       expect(response.status).to eq(200)
-      expect(response.parsed_body["categories"].map { |cat| cat["id"] }).not_to include(private_child.id)
+      expect(response.parsed_body["categories"].map { |cat| cat["id"] }).not_to include(
+        private_child.id,
+      )
       expect(response.parsed_body["topics"].map { |topic| topic["id"] }).not_to include(secret.id)
     end
     group.add(member)
@@ -155,7 +163,11 @@ RSpec.describe Moddashplugin::LibraryController do
   end
 
   it "does not hide resources because the user muted a topic" do
-    TopicUser.change(member.id, child_topic.id, notification_level: TopicUser.notification_levels[:muted])
+    TopicUser.change(
+      member.id,
+      child_topic.id,
+      notification_level: TopicUser.notification_levels[:muted],
+    )
     sign_in(member)
     load_library
     expect(response.parsed_body["topics"].map { |topic| topic["id"] }).to include(child_topic.id)
@@ -172,7 +184,9 @@ RSpec.describe Moddashplugin::LibraryController do
     SiteSetting.moddashplugin_legacy_topic_order = { child.id => [child_topic.id] }.to_json
     sign_in(member)
     load_library
-    expect(response.parsed_body.dig("order_config", child.id.to_s, "orderedIds")).to eq([child_topic.id])
+    expect(response.parsed_body.dig("order_config", child.id.to_s, "orderedIds")).to eq(
+      [child_topic.id],
+    )
   end
 
   it "handles invalid legacy order JSON without losing resources" do
@@ -188,12 +202,19 @@ RSpec.describe Moddashplugin::LibraryController do
     PluginStore.set("moddashplugin", "order_#{child.id}", [hidden.id, child_topic.id])
     sign_in(member)
     load_library
-    expect(response.parsed_body.dig("order_config", child.id.to_s, "orderedIds")).to eq([child_topic.id])
+    expect(response.parsed_body.dig("order_config", child.id.to_s, "orderedIds")).to eq(
+      [child_topic.id],
+    )
   end
 
   describe "staff ordering" do
     def save_order(ids, category_id: child.id)
-      put "/moddashplugin/categories/#{category_id}/order.json", params: { root_id: root.id, ordered_ids: ids }, as: :json
+      put "/moddashplugin/categories/#{category_id}/order.json",
+          params: {
+            root_id: root.id,
+            ordered_ids: ids,
+          },
+          as: :json
     end
 
     it "allows moderators to save category orders without an admin theme endpoint" do
@@ -202,7 +223,9 @@ RSpec.describe Moddashplugin::LibraryController do
       expect(response.status).to eq(200)
       expect(PluginStore.get("moddashplugin", "order_#{child.id}")).to eq([child_topic.id])
       load_library
-      expect(response.parsed_body.dig("order_config", child.id.to_s, "orderedIds")).to eq([child_topic.id])
+      expect(response.parsed_body.dig("order_config", child.id.to_s, "orderedIds")).to eq(
+        [child_topic.id],
+      )
     end
 
     it "forbids members from saving orders" do

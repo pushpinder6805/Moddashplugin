@@ -9,9 +9,134 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: moddashplugin-${{ github.ref }}
+  cancel-in-progress: true
+
+# Based on discourse/.github's official plugin workflow. An explicit Ruby 3.4
+# runner is required because the site's pinned core revision rejects Ruby 4,
+# which is now used by the mutable discourse_test:slim images.
 jobs:
-  ci:
-    uses: discourse/.github/.github/workflows/discourse-plugin.yml@v1
-    with:
-      name: moddashplugin
-      core_ref: "7d3d93e083b41f478616fa6447b884a50911187e"
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '12.11.2'
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint:js --max-warnings 0
+      - run: pnpm lint:css
+      - run: pnpm lint:prettier
+      - run: bundle exec rubocop .
+      - run: bundle exec stree check Gemfile $(git ls-files '*.rb')
+
+  tests:
+    name: ${{ matrix.suite }} tests (Medicaid Hub core)
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [backend, frontend, system]
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: discourse
+          POSTGRES_PASSWORD: discourse
+          POSTGRES_DB: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd 'redis-cli ping' --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    defaults:
+      run:
+        working-directory: discourse
+    env:
+      RAILS_ENV: test
+      LOAD_PLUGINS: '1'
+      PGHOST: 127.0.0.1
+      PGUSER: discourse
+      PGPASSWORD: discourse
+      BUNDLE_WITHOUT: development
+      PARALLEL_TEST_PROCESSORS: '1'
+      CHEAP_SOURCE_MAPS: '1'
+      DISCOURSE_DOWNLOAD_PRE_BUILT_ASSETS: '1'
+      QUNIT_REUSE_BUILD: '1'
+      CAPYBARA_DEFAULT_MAX_WAIT_TIME: '10'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          repository: discourse/discourse
+          ref: '7d3d93e083b41f478616fa6447b884a50911187e'
+          path: discourse
+      - uses: actions/checkout@v6
+        with:
+          path: discourse/plugins/moddashplugin
+      - name: Native dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libpq-dev libvips-dev
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: discourse/package.json
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
+          working-directory: discourse
+      - run: pnpm install --frozen-lockfile
+      - name: Browser dependencies
+        if: matrix.suite != 'backend'
+        run: pnpm playwright install --with-deps --no-shell chromium
+      - name: Prepare test database
+        run: |
+          bin/rake db:create
+          bin/rake db:migrate
+      - name: Production eager loading
+        if: matrix.suite == 'backend'
+        run: bin/rails zeitwerk:check
+      - name: Development reloading
+        if: matrix.suite == 'backend'
+        run: bin/rails runner 'Rails.application.reloader.reload!'
+      - name: Boot without database or Redis
+        if: matrix.suite == 'backend'
+        run: SKIP_DB_AND_REDIS=1 RAILS_DB=nonexistent bin/rails runner "puts 'booted successfully'"
+      - name: Plugin request specs
+        if: matrix.suite == 'backend'
+        run: bundle exec rspec --format documentation plugins/moddashplugin/spec/requests
+      - name: Build frontend
+        if: matrix.suite != 'backend'
+        env:
+          EMBER_ENV: development
+        run: script/assemble_ember_build.rb
+      - name: Plugin QUnit
+        if: matrix.suite == 'frontend'
+        run: bin/rake "plugin:qunit[moddashplugin,1200000]"
+      - name: Browser resource and core feature tests
+        if: matrix.suite == 'system'
+        run: bundle exec rspec --format documentation plugins/moddashplugin/spec/system
+      - uses: actions/upload-artifact@v6
+        if: failure()
+        with:
+          name: '${{ matrix.suite }}-diagnostics'
+          path: |
+            discourse/tmp/capybara/
+            discourse/log/test.log

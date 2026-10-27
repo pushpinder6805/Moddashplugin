@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe "Resource library", type: :system do
+RSpec.describe "Resource library" do
   fab!(:member, :user)
   fab!(:root, :category)
   fab!(:child) { Fabricate(:category, parent_category_id: root.id) }

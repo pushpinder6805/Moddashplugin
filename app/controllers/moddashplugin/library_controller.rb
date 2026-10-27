@@ -27,7 +27,8 @@ module ::Moddashplugin
       query = LibraryQuery.new(guardian, root_id)
       raise Discourse::NotFound unless query.categories.any? { |cat| cat.id == category_id }
       ids = params[:ordered_ids]
-      unless ids.is_a?(Array) && ids.length <= 20_000 && ids.all? { |id| id.is_a?(Integer) && id > 0 }
+      unless ids.is_a?(Array) && ids.length <= 20_000 &&
+               ids.all? { |id| id.is_a?(Integer) && id > 0 }
         raise Discourse::InvalidParameters.new(:ordered_ids)
       end
       ids = ids.uniq
