@@ -1,0 +1,16 @@
+moddashplugin:
+  moddashplugin_enabled:
+    default: false
+    client: true
+  moddashplugin_root_category_ids:
+    type: list
+    default: "10|61|197"
+    client: true
+  moddashplugin_topics_per_category:
+    default: 5
+    min: 1
+    max: 50
+    client: true
+  moddashplugin_legacy_topic_order:
+    type: string
+    default: "{}"

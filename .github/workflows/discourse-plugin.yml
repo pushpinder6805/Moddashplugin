@@ -1,0 +1,17 @@
+name: Discourse Plugin
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: discourse/.github/.github/workflows/discourse-plugin.yml@v1
+    with:
+      name: moddashplugin
+      core_ref: "7d3d93e083b41f478616fa6447b884a50911187e"
