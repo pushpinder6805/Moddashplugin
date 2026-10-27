@@ -67,6 +67,21 @@ RSpec.describe Moddashplugin::LibraryController do
     expect(response.parsed_body["next_cursor"]).to be_nil
   end
 
+  it "loads a library larger than the real 100-topic page size" do
+    Fabricate.times(103, :topic, category: child)
+    sign_in(member)
+    load_library
+    first = response.parsed_body
+    expect(first["topics"].length).to eq(100)
+    expect(first["next_cursor"]).to be_present
+    load_library(cursor: first["next_cursor"])
+    second = response.parsed_body
+    expect(second["topics"].length).to eq(5)
+    expect(second["next_cursor"]).to be_nil
+    ids = (first["topics"] + second["topics"]).map { |topic| topic["id"] }
+    expect(ids.uniq.length).to eq(105)
+  end
+
   it "does not skip later resources when earlier topics are deleted between pages" do
     sign_in(member)
     stub_const("Moddashplugin::LibraryQuery::PAGE_SIZE", 1)

@@ -93,4 +93,97 @@ module("Integration | Moddashplugin | resource library", function (hooks) {
       .dom('.category-node__topic-link[href="/t/root-resource/1010"]')
       .doesNotExist();
   });
+  test("failed loads show Retry and recover without a page reload", async function (assert) {
+    this.fetchStub
+      .onFirstCall()
+      .resolves(new Response("forbidden", { status: 403 }));
+    await render(
+      <template><ResourceLibrary @category={{this.category}} /></template>
+    );
+    await waitUntil(() => document.querySelector(".resource-library__error"));
+    assert.dom(".resource-library__error button").hasText("Retry");
+    await click(".resource-library__error button");
+    await waitUntil(() => document.querySelector(".category-node__topic-link"));
+    assert.dom(".resource-library__error").doesNotExist();
+    assert
+      .dom('.category-node__topic-link[href="/t/root-resource/1010"]')
+      .exists();
+  });
+
+  test("a late response from the old tab cannot replace the selected tab", async function (assert) {
+    let finishOld;
+    this.fetchStub.onFirstCall().returns(
+      new Promise((resolve) => {
+        finishOld = resolve;
+      })
+    );
+    await render(
+      <template><ResourceLibrary @category={{this.category}} /></template>
+    );
+    await click(".resource-library__tab:nth-child(2)");
+    await waitUntil(() =>
+      document.querySelector(
+        '.category-node__topic-link[href="/t/root-resource/1061"]'
+      )
+    );
+    finishOld(
+      new Response(
+        JSON.stringify({
+          categories: [{ id: 10 }],
+          topics: [
+            {
+              id: 999,
+              category_id: 10,
+              title: "Stale resource",
+              slug: "stale",
+            },
+          ],
+          next_cursor: null,
+        }),
+        { status: 200 }
+      )
+    );
+    await waitUntil(() => this.fetchStub.callCount === 2);
+    assert
+      .dom(".resource-library__title")
+      .hasText("California Resource Library");
+    assert
+      .dom('.category-node__topic-link[href="/t/root-resource/1061"]')
+      .exists();
+    assert
+      .dom('.category-node__topic-link[href="/t/stale/999"]')
+      .doesNotExist();
+  });
+
+  test("See more and Show less preserve the configured per-category limit", async function (assert) {
+    this.fetchStub.onFirstCall().resolves(
+      new Response(
+        JSON.stringify({
+          categories: [
+            { id: 10, name: "Root", slug: "root" },
+            { id: 11, name: "Child", slug: "child", parent_category_id: 10 },
+          ],
+          topics: Array.from({ length: 8 }, (_, index) => ({
+            id: index + 1,
+            category_id: 11,
+            title: `Resource ${index + 1}`,
+            slug: `resource-${index + 1}`,
+          })),
+          order_config: {},
+          next_cursor: null,
+        }),
+        { status: 200 }
+      )
+    );
+    await render(
+      <template><ResourceLibrary @category={{this.category}} /></template>
+    );
+    await waitUntil(() => document.querySelector(".category-node__see-more"));
+    assert.dom(".category-node__topic-link").exists({ count: 5 });
+    assert.dom(".category-node__see-more").hasText("See more (3)");
+    await click(".category-node__see-more");
+    assert.dom(".category-node__topic-link").exists({ count: 8 });
+    await click(".category-node__see-more");
+    assert.dom(".category-node__topic-link").exists({ count: 5 });
+  });
 });
