@@ -82,8 +82,8 @@ module ::Moddashplugin
     def page
       state = decode_cursor
       scope = topics_scope
-      scope = scope.where("topics.id <= ?", state["max_id"]) if state
       max_id = state ? state["max_id"] : scope.maximum(:id)
+      scope = scope.where("topics.id <= ?", max_id) if max_id
       if state
         scope =
           scope.where("(topics.created_at, topics.id) < (?, ?)", state["created_at"], state["id"])

@@ -31,6 +31,13 @@ module("Unit | Moddashplugin | resource data", function () {
     );
   });
 
+  test("an explicitly empty root configuration does not fall back to production IDs", function (assert) {
+    assert.deepEqual(
+      resourceRoots({ moddashplugin_root_category_ids: "" }),
+      []
+    );
+  });
+
   test("loads all bulk pages and publishes completed pages", async function (assert) {
     const urls = [];
     const pages = [];

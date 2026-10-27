@@ -120,7 +120,7 @@ export function resourceRoots(siteSettings) {
     { label: "California Resources", title: "California Resource Library" },
     { label: "All States Resources", title: "All States Resource Library" },
   ];
-  return String(siteSettings.moddashplugin_root_category_ids || "10|61|197")
+  return String(siteSettings.moddashplugin_root_category_ids ?? "10|61|197")
     .split("|")
     .map(Number)
     .filter((id) => Number.isSafeInteger(id) && id > 0)

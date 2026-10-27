@@ -18,7 +18,7 @@ concurrency:
 # which is now used by the mutable discourse_test:slim images.
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -40,7 +40,7 @@ jobs:
 
   tests:
     name: ${{ matrix.suite }} tests (Medicaid Hub core)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     strategy:
       fail-fast: false
@@ -69,7 +69,7 @@ jobs:
     env:
       RAILS_ENV: test
       # Use Discourse's supported libvips backend on Ubuntu runners.
-      DISCOURSE_ENABLE_VIPS_IMAGE_PROCESSING: '1'
+      DISCOURSE_ENABLE_VIPS_IMAGE_PROCESSING: 'true'
       LOAD_PLUGINS: '1'
       PGHOST: 127.0.0.1
       PGUSER: discourse
@@ -90,9 +90,9 @@ jobs:
         with:
           path: discourse/plugins/moddashplugin
       - name: Native dependencies
+        timeout-minutes: 5
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y libpq-dev libvips-dev
+          sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends libpq-dev libvips42t64
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
