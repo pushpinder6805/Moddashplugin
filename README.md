@@ -49,17 +49,19 @@ plugin workflow and runs against `7d3d93e083b41f478616fa6447b884a50911187e`, the
 by Medicaid Hub's public login page when development began. That does not replace a
 preview on the site's actual theme and other installed plugins.
 
-**Development build: do not install on production until the CI checks pass and the
-staging checklist below is complete.** The plugin is disabled by default.
+**Ready for staging installation.** Runtime source at `fa45b80` passed all 57 tests
+(25 backend, 12 frontend, 20 browser/system), lint, production eager loading,
+development reloading, and boot without database/Redis.
+[Verified CI run](https://github.com/pushpinder6805/Moddashplugin/actions/runs/40537040751).
+Complete the staging checklist with the site's theme and other plugins before
+production rollout. The plugin is disabled by default.
 
 ## Installation and migration
 
 For a standard self-hosted Discourse Docker installation:
 
-The repository is currently private. Configure a read-only GitHub deploy key for
-this repository on the Discourse server before rebuilding, and use the SSH clone
-URL below. Keep credentials out of `app.yml`; do not embed a personal access token.
-If you later make the repository public, the HTTPS URL also works without a key.
+The repository is public. Use the HTTPS clone URL below; no deploy key, token,
+or old Resource-Library component is needed.
 
 1. Note the three root category IDs and the desired topics-per-category limit.
    The plugin starts with newest-created resources first. It does not read the old
@@ -69,7 +71,7 @@ If you later make the repository public, the HTTPS URL also works without a key.
    commands under `hooks: after_code: exec: cmd:`:
 
    ```yaml
-   - git clone git@github.com:pushpinder6805/Moddashplugin.git moddashplugin
+   - git clone https://github.com/pushpinder6805/Moddashplugin.git moddashplugin
    ```
 
    The existing hook should run in `$home/plugins`. Do not create a second `hooks`
@@ -85,6 +87,31 @@ If you later make the repository public, the HTTPS URL also works without a key.
 Hosted Discourse customers must confirm custom-plugin support with their host.
 This is a server plugin, not a theme component that can be installed through the
 Customize → Themes screen.
+
+## Plugin or settings missing after rebuilding
+
+The plugin must be at `/var/www/discourse/plugins/moddashplugin/plugin.rb` inside
+the running app container. A folder on the host, a nested checkout, a clone under
+`$home` instead of `$home/plugins`, or rebuilding a different container will not
+register it. Disabled plugins still appear under Admin → Plugins.
+
+As a logged-in administrator, open `/admin/plugins/moddashplugin.json` on the
+forum. A loaded plugin returns its metadata, including `has_settings: true` and
+`enabled_setting: "moddashplugin_enabled"`. A 404 means it is not registered in
+that running app process; inspect its container path and rebuild output.
+
+On the Discourse host these checks do not modify the installation:
+
+```sh
+cd /var/discourse
+./launcher exec app bash -lc 'find /var/www/discourse/plugins -maxdepth 3 -iname "plugin.rb" -path "*oddash*" -print'
+./launcher exec app bash -lc 'git -C /var/www/discourse/plugins/moddashplugin rev-parse --short HEAD'
+```
+
+Check that the resource fix commit `fa45b80` or a later revision is present. Search
+Admin → Settings for `moddashplugin`; it should offer enablement, root category IDs,
+and the topics-per-category limit. This registration is covered by backend tests
+with the plugin disabled and no old component installed.
 
 ## Staging checklist
 
