@@ -3,8 +3,15 @@
 A Discourse plugin replacing the Resource-Library theme component on Medicaid Hub.
 
 It preserves the original three-tab layout, styles, title search, category hierarchy,
-See more / Show less, newest-first ordering, saved staff ordering, New Resource,
+See more / Show less, newest-first ordering, permanent staff ordering, New Resource,
 category management, edit/delete controls, and resource-topic banner/back link.
+
+The default order is creation date, newest first. Staff can use the existing
+Reorder mode, Move up / Move down and Save Order controls. Saved orders are stored
+per category in Discourse's database (`plugin_store_rows`), returned to all permitted
+users, and survive reloads, sign-outs and browser/device changes. New resources
+not yet ordered appear first; existing saved relative order is preserved.
+There is no runtime dependency on the old component and no use of browser storage.
 The original component is the feature and design reference:
 [Resources-Lib, branch 2026-10-04](https://github.com/pushpinder6805/Resources-Lib/tree/2026-10-04).
 
@@ -45,22 +52,27 @@ staging checklist below is complete.** The plugin is disabled by default.
 
 For a standard self-hosted Discourse Docker installation:
 
-1. In Admin → Customize → Themes, open the old Resource-Library component. Copy its
-   `resource_topic_order` JSON and note `topics_per_category` and the three root IDs.
-   Keep the component installed for rollback.
+The repository is currently private. Configure a read-only GitHub deploy key for
+this repository on the Discourse server before rebuilding, and use the SSH clone
+URL below. Keep credentials out of `app.yml`; do not embed a personal access token.
+If you later make the repository public, the HTTPS URL also works without a key.
+
+1. Note the three root category IDs and the desired topics-per-category limit.
+   The plugin starts with newest-created resources first. It does not read the old
+   component's settings or saved orders. Keep the old component disabled for rollback
+   if desired; the plugin does not require it to be installed.
 2. In `/var/discourse/containers/app.yml`, add this line to the existing plugin clone
    commands under `hooks: after_code: exec: cmd:`:
 
    ```yaml
-   - git clone https://github.com/pushpinder6805/Moddashplugin.git moddashplugin
+   - git clone git@github.com:pushpinder6805/Moddashplugin.git moddashplugin
    ```
 
    The existing hook should run in `$home/plugins`. Do not create a second `hooks`
    mapping or replace the existing plugin entries.
 3. Rebuild from `/var/discourse` with `./launcher rebuild app`.
 4. In Admin → Settings, search for `moddashplugin`. Set the root IDs (default
-   `10|61|197`), topics per category, and paste the copied JSON into
-   `moddashplugin_legacy_topic_order` to preserve the old order.
+   `10|61|197`) and topics per category. No order import is needed.
 5. Disable the old Resource-Library theme component on every active theme, then
    enable `moddashplugin_enabled`. The old component and plugin must not be enabled
    together: both register the same resource views.
@@ -78,8 +90,9 @@ Customize → Themes screen.
 - Verify every permitted category/resource, especially a library with over 20
   subcategories and over 100 resources. Restricted content must stay restricted.
 - Test direct loads, navigation from other pages, tab changes while loading,
-  topic links, the topic banner and its Back to Resource Library link.
-- Search titles in nested categories. Verify newest-first order, saved staff order,
+  topic links, the topic banner and its Back to Resource Library link (including
+  with lazy category loading enabled).
+- Search titles in nested categories. Verify newest-first order, permanent staff order,
   See more / Show less, and saving an order as a moderator.
 - Exercise New Resource, New Category (subject to Discourse's category-management
   permissions), edit and delete with suitable test resources.

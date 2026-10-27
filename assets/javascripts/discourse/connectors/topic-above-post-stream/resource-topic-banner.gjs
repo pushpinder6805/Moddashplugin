@@ -1,5 +1,6 @@
 import Component from "@glimmer/component";
 import { service } from "@ember/service";
+import getURL from "discourse/lib/get-url";
 import { resourceRoots } from "../../lib/resource-data.js";
 
 export default class ResourceTopicBanner extends Component {
@@ -13,11 +14,18 @@ export default class ResourceTopicBanner extends Component {
     return this.args.outletArgs?.model || this.args.model;
   }
 
+  get resourceContext() {
+    return this.topic?.moddashplugin_resource_context;
+  }
+
   get category() {
     return this.topic?.category;
   }
 
   get isResourceTopic() {
+    if (this.siteSettings.moddashplugin_enabled && this.resourceContext) {
+      return true;
+    }
     const cat = this.category;
     if (!this.siteSettings.moddashplugin_enabled || !cat) {
       return false;
@@ -33,6 +41,9 @@ export default class ResourceTopicBanner extends Component {
   }
 
   get categoryBreadcrumbs() {
+    if (this.resourceContext) {
+      return this.resourceContext.breadcrumbs;
+    }
     const crumbs = [];
     let current = this.category;
     while (current) {
@@ -49,6 +60,11 @@ export default class ResourceTopicBanner extends Component {
   }
 
   get backUrl() {
+    if (this.resourceContext) {
+      return getURL(
+        `/c/${this.resourceContext.root_slug}/${this.resourceContext.root_id}`
+      );
+    }
     let current = this.category;
     while (current) {
       if (this.rootIds.includes(current.id)) {

@@ -3,4 +3,3 @@ en:
     moddashplugin_enabled: "Enable the Moddash resource library. Disable the old Resource-Library theme component before enabling."
     moddashplugin_root_category_ids: "Root category IDs, in tab order: All Resources, California Resources, All States Resources."
     moddashplugin_topics_per_category: "Number of resources shown per category before See more."
-    moddashplugin_legacy_topic_order: "Optional JSON copied from the old component's resource_topic_order setting. New staff orders override imported orders."

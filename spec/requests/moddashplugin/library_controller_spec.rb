@@ -32,6 +32,16 @@ RSpec.describe Moddashplugin::LibraryController do
     expect(response.headers["Cache-Control"]).to include("private", "no-store")
   end
 
+  it "loads resources for administrators as well as regular members" do
+    sign_in(Fabricate(:admin))
+    load_library
+    expect(response.status).to eq(200)
+    expect(response.parsed_body["topics"].map { |topic| topic["id"] }).to contain_exactly(
+      root_topic.id,
+      child_topic.id,
+    )
+  end
+
   it "does not discard real resources whose title starts with About the" do
     resource = Fabricate(:topic, category: child, title: "About the Medicaid eligibility rules")
     sign_in(member)
@@ -195,21 +205,16 @@ RSpec.describe Moddashplugin::LibraryController do
     expect(response.parsed_body["topics"].map { |topic| topic["id"] }).to eq([matching.id])
   end
 
-  it "imports old orders without changing the theme component" do
-    SiteSetting.moddashplugin_legacy_topic_order = { child.id => [child_topic.id] }.to_json
+  it "starts with no saved order and returns newest resources first" do
     sign_in(member)
-    load_library
-    expect(response.parsed_body.dig("order_config", child.id.to_s, "orderedIds")).to eq(
-      [child_topic.id],
-    )
-  end
-
-  it "handles invalid legacy order JSON without losing resources" do
-    SiteSetting.moddashplugin_legacy_topic_order = "invalid-json"
-    sign_in(member)
+    root_topic.update!(created_at: 3.days.ago)
+    child_topic.update!(created_at: 1.day.ago)
     load_library
     expect(response.status).to eq(200)
-    expect(response.parsed_body["topics"].length).to eq(2)
+    expect(response.parsed_body["order_config"]).to eq({})
+    expect(response.parsed_body["topics"].map { |topic| topic["id"] }).to eq(
+      [child_topic.id, root_topic.id],
+    )
   end
 
   it "hides unlisted topic IDs saved in a staff order from regular members" do
@@ -220,6 +225,18 @@ RSpec.describe Moddashplugin::LibraryController do
     expect(response.parsed_body.dig("order_config", child.id.to_s, "orderedIds")).to eq(
       [child_topic.id],
     )
+  end
+
+  it "includes server-resolved resource breadcrumbs in the topic response" do
+    SiteSetting.lazy_load_categories_groups = Group::AUTO_GROUPS[:everyone].to_s
+    Fabricate(:post, topic: child_topic)
+    sign_in(member)
+    get "/t/#{child_topic.id}.json"
+    expect(response.status).to eq(200)
+    context = response.parsed_body["moddashplugin_resource_context"]
+    expect(context["root_id"]).to eq(root.id)
+    expect(context["root_slug"]).to eq(root.slug)
+    expect(context["breadcrumbs"].map { |cat| cat["id"] }).to eq([child.id])
   end
 
   describe "staff ordering" do
@@ -240,6 +257,21 @@ RSpec.describe Moddashplugin::LibraryController do
       load_library
       expect(response.parsed_body.dig("order_config", child.id.to_s, "orderedIds")).to eq(
         [child_topic.id],
+      )
+    end
+
+    it "persists staff orders in the database and returns them to another user" do
+      another = Fabricate(:topic, category: child)
+      sign_in(moderator)
+      save_order([child_topic.id, another.id])
+      expect(response.status).to eq(200)
+      expect(
+        PluginStoreRow.find_by(plugin_name: "moddashplugin", key: "order_#{child.id}"),
+      ).to be_present
+      sign_in(member)
+      load_library
+      expect(response.parsed_body.dig("order_config", child.id.to_s, "orderedIds")).to eq(
+        [child_topic.id, another.id],
       )
     end
 

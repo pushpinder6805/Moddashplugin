@@ -15,3 +15,9 @@ module ::Moddashplugin
 end
 
 require_relative "lib/moddashplugin/engine"
+
+after_initialize do
+  add_to_serializer(:topic_view, :moddashplugin_resource_context) do
+    Moddashplugin::LibraryQuery.topic_context(scope, object.topic.category_id)
+  end
+end

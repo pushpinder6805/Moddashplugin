@@ -19,6 +19,24 @@ module ::Moddashplugin
         .filter_map { |value| Integer(value, exception: false) }
     end
 
+    def self.topic_context(guardian, category_id)
+      return if category_id.blank?
+      roots = root_ids
+      return if roots.empty?
+      ancestors = Category.secured(guardian).with_ancestors(category_id).index_by(&:id)
+      current = ancestors[category_id]
+      breadcrumbs = []
+      seen = Set.new
+      while current && seen.add?(current.id)
+        if roots.include?(current.id)
+          return { root_id: current.id, root_slug: current.slug, breadcrumbs: breadcrumbs }
+        end
+        breadcrumbs.unshift({ id: current.id, name: current.name })
+        current = ancestors[current.parent_category_id]
+      end
+      nil
+    end
+
     def categories
       @categories ||=
         begin
@@ -49,6 +67,7 @@ module ::Moddashplugin
             TopicQuery
               .new(@guardian.user, guardian: @guardian)
               .default_results(limit: false, skip_ordering: true, no_definitions: true)
+              .references(:categories)
               .where(category_id: categories.map(&:id))
           # Shared drafts must never appear in the library, even for staff.
           scope = scope.where.not(id: SharedDraft.select(:topic_id))
@@ -95,16 +114,9 @@ module ::Moddashplugin
     def order_config
       keys = categories.map { |category| "order_#{category.id}" }
       stored = PluginStore.get_all(PLUGIN_NAME, keys)
-      legacy =
-        begin
-          JSON.parse(SiteSetting.moddashplugin_legacy_topic_order)
-        rescue StandardError
-          {}
-        end
-      legacy = {} unless legacy.is_a?(Hash)
       config = {}
       categories.each do |category|
-        ids = stored.fetch("order_#{category.id}") { legacy[category.id.to_s] }
+        ids = stored["order_#{category.id}"]
         config[category.id.to_s] = ids if ids.is_a?(Array)
       end
       # A staff member may have ordered an unlisted topic. Do not expose even

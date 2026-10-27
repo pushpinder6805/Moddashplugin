@@ -68,6 +68,8 @@ jobs:
         working-directory: discourse
     env:
       RAILS_ENV: test
+      # Use Discourse's supported libvips backend on Ubuntu runners.
+      DISCOURSE_ENABLE_VIPS_IMAGE_PROCESSING: '1'
       LOAD_PLUGINS: '1'
       PGHOST: 127.0.0.1
       PGUSER: discourse
