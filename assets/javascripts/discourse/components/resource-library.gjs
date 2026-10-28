@@ -559,14 +559,7 @@ export default class ResourceLibrary extends Component {
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error("Failed to open topic for editing", e);
-      this.diagnostics.record({
-        event: "action_failed",
-        operation: "edit",
-        code: "http_error",
-        root_id: this.activeRootId,
-        status: e.jqXHR?.status || e.status,
-        trace_id: this.diagnostics.traceId(),
-      });
+      this.diagnostics.recordActionFailure("edit", e, this.activeRootId);
       alert("Failed to open topic for editing. Please try again.");
     }
   }
@@ -589,14 +582,7 @@ export default class ResourceLibrary extends Component {
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error("Failed to delete topic", e);
-      this.diagnostics.record({
-        event: "action_failed",
-        operation: "delete",
-        code: "http_error",
-        root_id: this.activeRootId,
-        status: e.jqXHR?.status || e.status,
-        trace_id: this.diagnostics.traceId(),
-      });
+      this.diagnostics.recordActionFailure("delete", e, this.activeRootId);
       alert("Failed to delete topic. Please try again.");
     }
   }

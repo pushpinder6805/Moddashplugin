@@ -1,4 +1,5 @@
 import Service, { service } from "@ember/service";
+import RSVP from "rsvp";
 import { ajax } from "discourse/lib/ajax";
 
 const FIELDS = new Set([
@@ -51,6 +52,9 @@ export default class ModdashDiagnostics extends Service {
     window.removeEventListener("online", this.onlineHandler);
     window.removeEventListener("error", this.errorHandler, true);
     window.removeEventListener("unhandledrejection", this.rejectionHandler);
+    if (this.rsvpHandler) {
+      RSVP.off("error", this.rsvpHandler);
+    }
     this.appEvents.off("page:changed", this, "flush");
     super.willDestroy(...arguments);
   }
@@ -70,6 +74,7 @@ export default class ModdashDiagnostics extends Service {
     if (this.errorHandler) {
       return;
     }
+    this.seenErrors = new WeakSet();
     const capture = (error, filename = "", line = 0, column = 0) => {
       try {
         const location = `${filename} ${error?.stack || ""}`;
@@ -78,6 +83,25 @@ export default class ModdashDiagnostics extends Service {
           location.includes("moddash-diagnostics")
         ) {
           return;
+        }
+        if (!this.enabled) {
+          return;
+        }
+        if (error && typeof error === "object") {
+          if (this.seenErrors.has(error)) {
+            return;
+          }
+          this.seenErrors.add(error);
+        }
+        if (!filename) {
+          const frame = error?.stack?.match(
+            /([^\s()]*moddashplugin[^()\s]*\.js):(\d+):(\d+)/
+          );
+          if (frame) {
+            filename = frame[1];
+            line = Number(frame[2]);
+            column = Number(frame[3]);
+          }
         }
         const script = filename.split("/").pop()?.split("?")[0];
         this.record({
@@ -102,6 +126,8 @@ export default class ModdashDiagnostics extends Service {
         event.colno
       );
     this.rejectionHandler = (event) => capture(event.reason);
+    this.rsvpHandler = (error) => capture(error);
+    RSVP.on("error", this.rsvpHandler);
     window.addEventListener("error", this.errorHandler, true);
     window.addEventListener("unhandledrejection", this.rejectionHandler);
   }
@@ -137,6 +163,19 @@ export default class ModdashDiagnostics extends Service {
     } catch {
       // Reporting also works in memory when storage is unavailable.
     }
+  }
+
+  recordActionFailure(operation, error, rootId) {
+    const xhr = error?.jqXHR || error;
+    this.record({
+      event: "action_failed",
+      operation,
+      code: xhr?.status === 0 ? "network_error" : "http_error",
+      root_id: rootId,
+      status: xhr?.status,
+      request_id: xhr?.getResponseHeader?.("X-Request-Id"),
+      trace_id: this.traceId(),
+    });
   }
 
   record(event) {
@@ -193,11 +232,15 @@ export default class ModdashDiagnostics extends Service {
     this.sending = true;
     const batch = this.queue.slice(0, 10);
     try {
-      await ajax("/moddashplugin/diagnostics.json", {
+      const delivery = await ajax("/moddashplugin/diagnostics.json", {
         type: "POST",
+        returnXHR: true,
         contentType: "application/json",
         data: JSON.stringify({ events: batch }),
       });
+      if (delivery?.xhr?.status !== 204) {
+        throw new Error("Diagnostic report was not acknowledged");
+      }
       // New reports may arrive while the batch is in flight.
       const sent = new Set(batch);
       this.queue = this.queue.filter((item) => !sent.has(item));

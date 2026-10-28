@@ -45,13 +45,16 @@ module ::Moddashplugin
     ].freeze
     IDENTIFIERS = %w[trace_id request_id exception_class client_version script].freeze
 
+    def self.valid?(data)
+      data = data.to_h.with_indifferent_access
+      EVENTS.include?(data[:event]) && OPERATIONS.include?(data[:operation]) &&
+        CODES.include?(data[:code])
+    end
+
     def self.record(data, user: nil, source: "client")
       return unless SiteSetting.moddashplugin_diagnostics_enabled
       data = data.to_h.with_indifferent_access
-      if EVENTS.exclude?(data[:event]) || OPERATIONS.exclude?(data[:operation]) ||
-           CODES.exclude?(data[:code])
-        return
-      end
+      return unless valid?(data)
       item = {
         "id" =>
           (
@@ -104,7 +107,7 @@ module ::Moddashplugin
         # The receive time remains authoritative when the client clock is wrong.
       end
       key = "event/#{item["id"]}"
-      return if PluginStoreRow.exists?(plugin_name: NAMESPACE, key: key)
+      return :duplicate if PluginStoreRow.exists?(plugin_name: NAMESPACE, key: key)
       PluginStore.set(NAMESPACE, key, item)
       rows = PluginStoreRow.where(plugin_name: NAMESPACE)
       rows.where(

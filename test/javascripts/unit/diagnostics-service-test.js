@@ -76,4 +76,47 @@ module("Unit | Moddashplugin | diagnostics queue", function (hooks) {
     });
     assert.strictEqual(this.reporter.queue.length, 0);
   });
+  test("a successful HTML response is not mistaken for accepted delivery", async function (assert) {
+    pretender.post("/moddashplugin/diagnostics.json", () => [
+      200,
+      { "Content-Type": "text/html" },
+      "<html>Sign in</html>",
+    ]);
+    this.reporter.record({
+      event: "load_failed",
+      operation: "load",
+      code: "timeout",
+    });
+    await this.reporter.flush();
+    assert.strictEqual(this.reporter.queue.length, 1);
+  });
+
+  test("action failures preserve the server request ID and distinguish network failures", function (assert) {
+    this.reporter.recordActionFailure(
+      "reorder",
+      { jqXHR: { status: 403, getResponseHeader: () => "server-request-123" } },
+      10
+    );
+    assert.strictEqual(this.reporter.queue[0].request_id, "server-request-123");
+    assert.strictEqual(this.reporter.queue[0].status, 403);
+    this.reporter.recordActionFailure("edit", { jqXHR: { status: 0 } }, 10);
+    assert.strictEqual(this.reporter.queue[1].code, "network_error");
+  });
+  test("captures plugin RSVP errors once without recording raw messages or stacks", function (assert) {
+    this.reporter.installErrorCapture();
+    const error = new TypeError("private resource details");
+    error.stack =
+      "TypeError: private resource details\n at render (https://example.invalid/assets/plugins/moddashplugin-abcd.js:12:34)";
+    this.reporter.rsvpHandler(error);
+    this.reporter.rsvpHandler(error);
+    assert.strictEqual(this.reporter.queue.length, 1);
+    assert.strictEqual(this.reporter.queue[0].exception_class, "TypeError");
+    assert.strictEqual(this.reporter.queue[0].line, 12);
+    assert.false(
+      JSON.stringify(this.reporter.queue).includes("private resource details")
+    );
+    assert.false(
+      JSON.stringify(this.reporter.queue).includes("example.invalid")
+    );
+  });
 });

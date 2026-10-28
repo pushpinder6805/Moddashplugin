@@ -97,7 +97,7 @@ the existing plugin Settings tab remains available.
 
 Reports cover resource loads and failures, retries/recovery, title-search failures,
 edit/delete/reorder failures, server exceptions in plugin endpoints, and uncaught
-JavaScript errors whose location or stack points to this plugin. Normal navigation
+JavaScript/native and Ember RSVP errors whose location or stack points to this plugin. Normal navigation
 cancellation is ignored. A failed load displays a reference ID for screenshots.
 
 Filter by account, root category, reference or server request ID. Uncheck

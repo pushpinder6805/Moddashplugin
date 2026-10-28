@@ -26,7 +26,7 @@ module ::Moddashplugin
       end
       events.each do |event|
         next unless event.respond_to?(:permit)
-        Diagnostics.record(
+        data =
           event.permit(
             :event_id,
             :response_type,
@@ -39,9 +39,10 @@ module ::Moddashplugin
             :browser,
             *Diagnostics::NUMBERS,
             *Diagnostics::IDENTIFIERS,
-          ).to_h,
-          user: current_user,
-        )
+          ).to_h
+        next unless Diagnostics.valid?(data)
+        stored = Diagnostics.record(data, user: current_user)
+        return head :service_unavailable unless stored
       end
       head :no_content
     end

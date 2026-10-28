@@ -145,14 +145,7 @@ export default class CategoryNode extends Component {
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error("Failed to save topic order", e);
-      this.diagnostics.record({
-        event: "action_failed",
-        operation: "reorder",
-        code: "http_error",
-        root_id: this.args.rootId,
-        status: e.jqXHR?.status || e.status,
-        trace_id: this.diagnostics.traceId(),
-      });
+      this.diagnostics.recordActionFailure("reorder", e, this.args.rootId);
       alert("Failed to save topic order. Please try again.");
     } finally {
       this.savingOrder = false;

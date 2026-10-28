@@ -66,6 +66,31 @@ RSpec.describe "Moddashplugin diagnostics" do
     expect(Moddashplugin::Diagnostics.entries.length).to eq(1)
   end
 
+  it "does not acknowledge a report when diagnostic storage is unavailable" do
+    sign_in(member)
+    PluginStore.stubs(:set).raises(IOError, "storage unavailable")
+    report
+    expect(response.status).to eq(503)
+    expect(Moddashplugin::Diagnostics.entries).to be_empty
+  end
+
+  it "preserves failures ahead of routine summaries when history is full" do
+    stub_const(Moddashplugin::Diagnostics, :MAX_ENTRIES, 3) do
+      failure = payload
+      Moddashplugin::Diagnostics.record(failure, user: member)
+      5.times do
+        Moddashplugin::Diagnostics.record(
+          payload.merge(event: "load_complete", code: "ok"),
+          user: member,
+        )
+      end
+      expect(Moddashplugin::Diagnostics.entries.length).to eq(3)
+      expect(Moddashplugin::Diagnostics.entries.map { |entry| entry["id"] }).to include(
+        failure[:event_id],
+      )
+    end
+  end
+
   it "allows administrators, but not members, to inspect reports" do
     Moddashplugin::Diagnostics.record(payload, user: member)
     sign_in(member)
