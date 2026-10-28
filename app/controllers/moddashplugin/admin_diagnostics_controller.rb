@@ -4,6 +4,10 @@ module ::Moddashplugin
   # Admin-only incident history remains readable after disabling the library.
   # rubocop:disable Discourse/Plugins/CallRequiresPlugin
   class AdminDiagnosticsController < ::Admin::AdminController
+    def page
+      render body: nil
+    end
+
     def index
       response.headers["Cache-Control"] = "private, no-store"
       render_json_dump(

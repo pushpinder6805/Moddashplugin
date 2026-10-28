@@ -8,4 +8,8 @@ Moddashplugin::Engine.routes.draw do
   put "/categories/:category_id/order" => "library#update_order", :defaults => { format: :json }
 end
 
-Discourse::Application.routes.draw { mount ::Moddashplugin::Engine, at: "/moddashplugin" }
+Discourse::Application.routes.draw do
+  mount ::Moddashplugin::Engine, at: "/moddashplugin"
+  get "/admin/plugins/moddashplugin/diagnostics" => "moddashplugin/admin_diagnostics#page",
+      :constraints => AdminConstraint.new
+end

@@ -70,7 +70,7 @@ RSpec.describe "Moddashplugin diagnostics" do
     Moddashplugin::Diagnostics.record(payload, user: member)
     sign_in(member)
     get "/moddashplugin/admin/diagnostics.json"
-    expect(response.status).to eq(404)
+    expect(response.status).to eq(403)
     sign_in(admin)
     get "/moddashplugin/admin/diagnostics.json"
     expect(response.status).to eq(200)
@@ -156,7 +156,7 @@ RSpec.describe "Moddashplugin diagnostics" do
     Moddashplugin::Diagnostics.record(payload, user: member)
     sign_in(member)
     delete "/moddashplugin/admin/diagnostics.json"
-    expect(response.status).to eq(404)
+    expect(response.status).to eq(403)
     sign_in(admin)
     delete "/moddashplugin/admin/diagnostics.json"
     expect(response.status).to eq(204)

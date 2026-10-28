@@ -42,7 +42,7 @@ module("Unit | Moddashplugin | diagnostics queue", function (hooks) {
     pretender.post("/moddashplugin/diagnostics.json", (request) => {
       const data = JSON.parse(request.requestBody);
       assert.strictEqual(data.events.length, 1);
-      return response({}, 204);
+      return response(204, {});
     });
     this.reporter.record({
       event: "load_failed",
@@ -55,7 +55,7 @@ module("Unit | Moddashplugin | diagnostics queue", function (hooks) {
 
   test("a reporting outage preserves the queued event without throwing", async function (assert) {
     pretender.post("/moddashplugin/diagnostics.json", () =>
-      response({ errors: ["offline"] }, 503)
+      response(503, { errors: ["offline"] })
     );
     this.reporter.record({
       event: "load_failed",
