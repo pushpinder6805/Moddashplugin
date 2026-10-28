@@ -49,12 +49,17 @@ plugin workflow and runs against `7d3d93e083b41f478616fa6447b884a50911187e`, the
 by Medicaid Hub's public login page when development began. That does not replace a
 preview on the site's actual theme and other installed plugins.
 
-**Diagnostics build 0.2.0 is under test. Keep the working build installed until the new checks pass.** The previous runtime source at `fa45b80` passed all 57 tests
-(25 backend, 12 frontend, 20 browser/system), lint, production eager loading,
-development reloading, and boot without database/Redis.
-[Verified CI run](https://github.com/pushpinder6805/Moddashplugin/actions/runs/40537040751).
+**Version 0.2.0 is ready for staging installation.** Runtime source at `a0bc7cc`
+passed all 83 tests (39 backend, 23 frontend, 21 browser/system), lint, production
+eager loading, development reloading, and boot without database/Redis.
+[Verified diagnostics CI run](https://github.com/pushpinder6805/Moddashplugin/actions/runs/40673498703).
 Complete the staging checklist with the site's theme and other plugins before
-production rollout. The plugin is disabled by default.
+production rollout. Existing plugin settings and saved resource orders are preserved.
+
+To update an existing standard installation, rebuild its container, refresh the
+browser, then open **Admin → Plugins → Moddashplugin → Diagnostics**. The new
+`moddashplugin_diagnostics_enabled` switch defaults to enabled. Reports start after
+the updated server and browser code are active; earlier incidents are not backfilled.
 
 ## Installation and migration
 
@@ -118,7 +123,9 @@ which remains available if the library is disabled.
 The browser queues up to 20 technical reports for up to 24 hours in that tab's
 session storage. Reports survive same-tab reloads and retry after connectivity or
 navigation recovery; closing the tab can discard them. Event IDs prevent duplicate
-reports when delivery is retried. Reporting is asynchronous, rate limited and best
+reports when delivery is retried. Queued entries are removed only after the collector
+acknowledges delivery; storage failures and unexpected HTTP 200/HTML responses keep
+them queued. Reporting is asynchronous, rate limited and best
 effort; its failures never block resource loading.
 
 Account identity is assigned by the server. Reports omit topic titles/content,
