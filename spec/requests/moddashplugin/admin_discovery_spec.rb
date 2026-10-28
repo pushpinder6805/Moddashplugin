@@ -24,6 +24,7 @@ RSpec.describe "Moddashplugin admin discovery" do
     names = response.parsed_body["site_settings"].map { |setting| setting["setting"] }
     expect(names).to contain_exactly(
       "moddashplugin_enabled",
+      "moddashplugin_diagnostics_enabled",
       "moddashplugin_root_category_ids",
       "moddashplugin_topics_per_category",
     )

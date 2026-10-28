@@ -32,6 +32,9 @@ export default class ResourceLibrary extends Component {
   @service store;
   @service currentUser;
   @service siteSettings;
+  @service("moddash-diagnostics") diagnostics;
+
+  @tracked errorReference = null;
 
   @tracked activeRootId = 10;
   @tracked categories = [];
@@ -148,8 +151,11 @@ export default class ResourceLibrary extends Component {
     return category.parent_category_id ?? category.parentCategory?.id ?? null;
   }
 
-  requestJson(url, signal) {
-    return requestJson(getURL(url), signal);
+  requestJson(url, signal, context = {}) {
+    return requestJson(getURL(url), signal, {
+      traceId: context.trace_id,
+      onEvent: (event) => this.diagnostics.record({ ...context, ...event }),
+    });
   }
 
   getCategoryPosition(category) {
@@ -241,17 +247,31 @@ export default class ResourceLibrary extends Component {
     this.loadError = false;
     this.loading = true;
     const map = {};
+    const context = {
+      trace_id: this.diagnostics.traceId(),
+      root_id: rootId,
+      operation: "load",
+    };
+    const started = Date.now();
+    let pages = 0;
+    let expectedTopics = null;
+    let categoryCount = 0;
+    this.errorReference = null;
 
     try {
       await loadResourceLibrary(
         rootId,
-        (url, signal) => this.requestJson(url, signal),
+        (url, signal) =>
+          this.requestJson(url, signal, { ...context, page: pages + 1 }),
         controller.signal,
         (page, first) => {
           if (requestId !== this._loadRequestId || controller.signal.aborted) {
             return;
           }
+          pages++;
           if (first) {
+            expectedTopics = page.diagnostics?.expected_topics ?? null;
+            categoryCount = page.categories.length;
             this.rootCategory = page.categories.find(
               (cat) => cat.id === rootId
             );
@@ -291,10 +311,46 @@ export default class ResourceLibrary extends Component {
         this.topicsMap = Object.fromEntries(
           Object.entries(map).map(([id, topics]) => [id, [...topics.values()]])
         );
+        const topics = Object.values(this.topicsMap).reduce(
+          (sum, items) => sum + items.length,
+          0
+        );
+        this.diagnostics.record({
+          ...context,
+          event: "load_complete",
+          code:
+            expectedTopics !== null && topics !== expectedTopics
+              ? "count_changed"
+              : "ok",
+          topics,
+          expected_topics: expectedTopics,
+          categories: categoryCount,
+          pages,
+          duration_ms: Date.now() - started,
+        });
       }
     } catch (error) {
       if (requestId === this._loadRequestId && !controller.signal.aborted) {
         this.loadError = true;
+        this.errorReference = context.trace_id;
+        this.diagnostics.record({
+          ...context,
+          event: "load_failed",
+          code: error.code || "unexpected_client_error",
+          status: error.status,
+          response_type: error.responseType,
+          redirected: error.redirected,
+          request_id: error.requestId,
+          attempt: error.attempt,
+          topics: Object.values(map).reduce(
+            (sum, items) => sum + items.size,
+            0
+          ),
+          expected_topics: expectedTopics,
+          categories: categoryCount,
+          pages,
+          duration_ms: Date.now() - started,
+        });
         // eslint-disable-next-line no-console
         console.error("ResourceLibrary: failed to load", error);
       }
@@ -312,19 +368,41 @@ export default class ResourceLibrary extends Component {
 
   async searchResourceTopics(query, rootId, signal) {
     const map = {};
-    await loadResourceLibrary(
-      rootId,
-      (url, requestSignal) => this.requestJson(url, requestSignal),
-      signal,
-      (page) => {
-        for (const topic of page.topics) {
-          map[topic.category_id] ||= [];
-          map[topic.category_id].push(topic);
-        }
-      },
-      query
-    );
-    return map;
+    const context = {
+      trace_id: this.diagnostics.traceId(),
+      root_id: rootId,
+      operation: "search",
+    };
+    const started = Date.now();
+    try {
+      await loadResourceLibrary(
+        rootId,
+        (url, requestSignal) => this.requestJson(url, requestSignal, context),
+        signal,
+        (page) => {
+          for (const topic of page.topics) {
+            map[topic.category_id] ||= [];
+            map[topic.category_id].push(topic);
+          }
+        },
+        query
+      );
+      return map;
+    } catch (error) {
+      if (!signal.aborted) {
+        this.diagnostics.record({
+          ...context,
+          event: "search_failed",
+          code: error.code || "unexpected_client_error",
+          status: error.status,
+          response_type: error.responseType,
+          redirected: error.redirected,
+          request_id: error.requestId,
+          duration_ms: Date.now() - started,
+        });
+      }
+      throw error;
+    }
   }
 
   getLocalSearchTopics(query) {
@@ -460,6 +538,13 @@ export default class ResourceLibrary extends Component {
       const result = await ajax(`/t/${topic.id}.json`);
       const post = result.post_stream?.posts?.[0];
       if (!post) {
+        this.diagnostics.record({
+          event: "action_failed",
+          operation: "edit",
+          code: "invalid_response",
+          root_id: this.activeRootId,
+          trace_id: this.diagnostics.traceId(),
+        });
         alert("Could not load topic content.");
         return;
       }
@@ -474,6 +559,14 @@ export default class ResourceLibrary extends Component {
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error("Failed to open topic for editing", e);
+      this.diagnostics.record({
+        event: "action_failed",
+        operation: "edit",
+        code: "http_error",
+        root_id: this.activeRootId,
+        status: e.jqXHR?.status || e.status,
+        trace_id: this.diagnostics.traceId(),
+      });
       alert("Failed to open topic for editing. Please try again.");
     }
   }
@@ -496,6 +589,14 @@ export default class ResourceLibrary extends Component {
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error("Failed to delete topic", e);
+      this.diagnostics.record({
+        event: "action_failed",
+        operation: "delete",
+        code: "http_error",
+        root_id: this.activeRootId,
+        status: e.jqXHR?.status || e.status,
+        trace_id: this.diagnostics.traceId(),
+      });
       alert("Failed to delete topic. Please try again.");
     }
   }
@@ -610,6 +711,8 @@ export default class ResourceLibrary extends Component {
               type="button"
               {{on "click" this.retryLoad}}
             >Retry</button>
+            {{#if this.errorReference}}<span>Reference:
+                <code>{{this.errorReference}}</code></span>{{/if}}
           </div>
         {{/if}}
         {{#if this.loading}}

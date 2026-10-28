@@ -1,3 +1,11 @@
+function emitDiagnostic(context, event) {
+  try {
+    context.onEvent?.(event);
+  } catch {
+    /* A reporter must never affect loading. */
+  }
+}
+
 const RETRIES = 2;
 const TIMEOUT_MS = 15000;
 
@@ -22,7 +30,7 @@ function wait(ms, signal) {
   });
 }
 
-export async function requestJson(url, signal) {
+export async function requestJson(url, signal, context = {}) {
   for (let attempt = 0; ; attempt++) {
     if (signal?.aborted) {
       throw abortError();
@@ -31,6 +39,8 @@ export async function requestJson(url, signal) {
     const cancel = () => controller.abort();
     signal?.addEventListener("abort", cancel, { once: true });
     const timer = setTimeout(cancel, TIMEOUT_MS);
+    const started = Date.now();
+    let requestId = null;
     let retryDelay = 1000 * 2 ** attempt;
     try {
       const response = await fetch(url, {
@@ -38,11 +48,15 @@ export async function requestJson(url, signal) {
         headers: {
           accept: "application/json",
           "X-Requested-With": "XMLHttpRequest",
+          ...(context.traceId ? { "X-Moddash-Trace-ID": context.traceId } : {}),
         },
         signal: controller.signal,
       });
+      requestId = response.headers.get("X-Request-Id");
       if (!response.ok) {
         const error = new Error(`Resource request failed: ${response.status}`);
+        error.status = response.status;
+        error.code = "http_error";
         error.retryable = response.status === 429 || response.status >= 500;
         const retryAfter = response.headers.get("Retry-After");
         if (retryAfter) {
@@ -56,14 +70,68 @@ export async function requestJson(url, signal) {
         }
         throw error;
       }
-      return await response.json();
-    } catch (error) {
+      let result;
+      try {
+        result = await response.json();
+      } catch (cause) {
+        const error = new Error("Invalid resource response", { cause });
+        error.code = controller.signal.aborted ? "timeout" : "invalid_response";
+        error.status = response.status;
+        error.responseType = response.headers
+          .get("Content-Type")
+          ?.includes("text/html")
+          ? "html"
+          : response.headers.get("Content-Type")?.includes("json")
+            ? "json"
+            : "other";
+        error.redirected = response.redirected;
+        throw error;
+      }
+      if (attempt > 0) {
+        emitDiagnostic(context, {
+          event: "request_recovered",
+          code: "ok",
+          attempt: attempt + 1,
+          request_id: requestId,
+          duration_ms: Date.now() - started,
+        });
+      }
+      return result;
+    } catch (cause) {
       if (signal?.aborted) {
         throw abortError();
       }
+      // DOMException.code is read-only and numeric. Keep our diagnostic code on
+      // a normal Error, including when fetch is aborted by the timeout.
+      const error = Object.assign(
+        new Error(cause.message || "Resource request failed", { cause }),
+        {
+          code: controller.signal.aborted
+            ? "timeout"
+            : typeof cause.code === "string"
+              ? cause.code
+              : "network_error",
+          status: cause.status,
+          responseType: cause.responseType,
+          redirected: cause.redirected,
+          retryable: cause.retryable,
+        }
+      );
+      error.requestId = requestId;
+      error.attempt = attempt + 1;
       if (error.retryable === false || attempt >= RETRIES) {
         throw error;
       }
+      emitDiagnostic(context, {
+        event: "request_retry",
+        code: error.code,
+        status: error.status,
+        response_type: error.responseType,
+        redirected: error.redirected,
+        attempt: attempt + 1,
+        request_id: requestId,
+        duration_ms: Date.now() - started,
+      });
     } finally {
       clearTimeout(timer);
       signal?.removeEventListener("abort", cancel);
@@ -159,7 +227,9 @@ export async function loadResourceLibrary(
       !Array.isArray(result.topics) ||
       (first && !Array.isArray(result.categories))
     ) {
-      throw new Error("Invalid resource library response");
+      throw Object.assign(new Error("Invalid resource library response"), {
+        code: "invalid_response",
+      });
     }
     if (
       first &&
@@ -167,17 +237,24 @@ export async function loadResourceLibrary(
         (category) => Number(category.id) === Number(rootId)
       )
     ) {
-      throw new Error("Resource root is missing from the library response");
+      throw Object.assign(
+        new Error("Resource root is missing from the library response"),
+        { code: "invalid_response" }
+      );
     }
     if (result.next_cursor != null && typeof result.next_cursor !== "string") {
-      throw new Error("Invalid resource cursor");
+      throw Object.assign(new Error("Invalid resource cursor"), {
+        code: "invalid_response",
+      });
     }
     onPage(result, first);
     first = false;
     cursor = result.next_cursor;
     if (cursor) {
       if (cursors.has(cursor) || result.topics.length === 0) {
-        throw new Error("Resource pagination did not advance");
+        throw Object.assign(new Error("Resource pagination did not advance"), {
+          code: "pagination_stalled",
+        });
       }
       cursors.add(cursor);
     }

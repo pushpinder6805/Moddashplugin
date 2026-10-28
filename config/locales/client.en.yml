@@ -1,5 +1,9 @@
 en:
   admin_js:
+    moddashplugin:
+      diagnostics:
+        title: "Diagnostics"
+        description: "Resource failures, retries and load summaries"
     admin:
       site_settings:
         categories:

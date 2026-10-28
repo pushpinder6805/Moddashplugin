@@ -108,7 +108,7 @@ module ::Moddashplugin
             expires_in: 1.hour,
           )
       end
-      { topics: records, next_cursor: next_cursor }
+      { topics: records, next_cursor: next_cursor, max_id: max_id }
     end
 
     def order_config

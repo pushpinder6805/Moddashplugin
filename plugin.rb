@@ -2,7 +2,7 @@
 
 # name: moddashplugin
 # about: Resource Library with complete, permission-aware category and topic loading.
-# version: 0.1.0
+# version: 0.2.0
 # authors: Pushpender Singh
 # url: https://github.com/pushpinder6805/Moddashplugin
 # required_version: 2026.10.0-latest

@@ -11,3 +11,6 @@ moddashplugin:
     min: 1
     max: 50
     client: true
+  moddashplugin_diagnostics_enabled:
+    default: true
+    client: true

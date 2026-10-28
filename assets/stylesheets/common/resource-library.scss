@@ -749,3 +749,39 @@ html:has(.resource-library, .resource-topic-view) {
     border-radius: 6px;
   }
 }
+
+.moddash-diagnostics__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1em;
+  align-items: center;
+  margin-block: 1em;
+
+  input[type="text"],
+  input:not([type]) {
+    min-width: 22em;
+  }
+}
+
+.moddash-diagnostics__table {
+  overflow-x: auto;
+
+  table {
+    width: 100%;
+  }
+
+  td,
+  th {
+    padding: 0.75em;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  td {
+    border-bottom: 1px solid var(--primary-low);
+  }
+
+  code {
+    overflow-wrap: anywhere;
+  }
+}

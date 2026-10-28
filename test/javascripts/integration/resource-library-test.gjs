@@ -10,6 +10,7 @@ module("Integration | Moddashplugin | resource library", function (hooks) {
   hooks.beforeEach(function () {
     const settings = this.owner.lookup("service:site-settings");
     settings.moddashplugin_enabled = true;
+    settings.moddashplugin_diagnostics_enabled = false;
     settings.moddashplugin_root_category_ids = "10|61|197";
     settings.moddashplugin_topics_per_category = 5;
     this.category = { id: 10 };

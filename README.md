@@ -49,7 +49,7 @@ plugin workflow and runs against `7d3d93e083b41f478616fa6447b884a50911187e`, the
 by Medicaid Hub's public login page when development began. That does not replace a
 preview on the site's actual theme and other installed plugins.
 
-**Ready for staging installation.** Runtime source at `fa45b80` passed all 57 tests
+**Diagnostics build 0.2.0 is under test. Keep the working build installed until the new checks pass.** The previous runtime source at `fa45b80` passed all 57 tests
 (25 backend, 12 frontend, 20 browser/system), lint, production eager loading,
 development reloading, and boot without database/Redis.
 [Verified CI run](https://github.com/pushpinder6805/Moddashplugin/actions/runs/40537040751).
@@ -87,6 +87,46 @@ or old Resource-Library component is needed.
 Hosted Discourse customers must confirm custom-plugin support with their host.
 This is a server plugin, not a theme component that can be installed through the
 Customize → Themes screen.
+
+## Central diagnostics (0.2.0)
+
+Open **Admin → Plugins → Moddashplugin → Diagnostics**, or
+`/admin/plugins/moddashplugin/diagnostics`. Collection is enabled by default through
+`moddashplugin_diagnostics_enabled`. Only administrators can read or clear reports;
+the existing plugin Settings tab remains available.
+
+Reports cover resource loads and failures, retries/recovery, title-search failures,
+edit/delete/reorder failures, server exceptions in plugin endpoints, and uncaught
+JavaScript errors whose location or stack points to this plugin. Normal navigation
+cancellation is ignored. A failed load displays a reference ID for screenshots.
+
+Filter by account, root category, reference or server request ID. Uncheck
+**Failures and retries only** to see successful loads and recoveries. Expand Details
+for actual/expected topic counts, categories, page/attempt counts, duration, HTTP
+status, browser and plugin version/revision. HTML responses/redirects help identify
+sign-in or proxy responses. Correlate server request IDs with Discourse's `/logs`.
+Counts respect each account's category permissions; a smaller library can reflect
+access rules rather than a loading failure.
+
+Reports are stored centrally in Discourse's database in a separate plugin-store
+namespace. History is capped at 2000 entries and displays the last 14 days. Expired
+rows are pruned on the next report. Routine successful summaries are trimmed before
+failures and recoveries. **Clear reports** preserves resources and permanent staff
+orders. The admin-only raw endpoint is `/moddashplugin/admin/diagnostics.json`,
+which remains available if the library is disabled.
+
+The browser queues up to 20 technical reports for up to 24 hours in that tab's
+session storage. Reports survive same-tab reloads and retry after connectivity or
+navigation recovery; closing the tab can discard them. Event IDs prevent duplicate
+reports when delivery is retried. Reporting is asynchronous, rate limited and best
+effort; its failures never block resource loading.
+
+Account identity is assigned by the server. Reports omit topic titles/content,
+search text, full URLs, pagination cursors, raw error messages/stacks, credentials
+and IP addresses. Refresh browsers after rebuilding to load the reporter.
+Errors before plugin JavaScript executes, permanently offline/closed tabs and
+incidents before installation cannot be fully reconstructed. This adds evidence
+for investigation rather than a guarantee that all future errors are prevented.
 
 ## Plugin or settings missing after rebuilding
 

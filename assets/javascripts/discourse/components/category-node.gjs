@@ -4,6 +4,7 @@ import { tracked } from "@glimmer/tracking";
 import { fn } from "@ember/helper";
 import { on } from "@ember/modifier";
 import { action } from "@ember/object";
+import { service } from "@ember/service";
 import { ajax } from "discourse/lib/ajax";
 import { eq } from "discourse/truth-helpers";
 import { sortResourceTopics } from "../lib/resource-data.js";
@@ -13,6 +14,8 @@ function positionLabel(index) {
 }
 
 export default class CategoryNode extends Component {
+  @service("moddash-diagnostics") diagnostics;
+
   @tracked showAll = false;
   @tracked reorderMode = false;
   @tracked localOrderedIds = null;
@@ -142,6 +145,14 @@ export default class CategoryNode extends Component {
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error("Failed to save topic order", e);
+      this.diagnostics.record({
+        event: "action_failed",
+        operation: "reorder",
+        code: "http_error",
+        root_id: this.args.rootId,
+        status: e.jqXHR?.status || e.status,
+        trace_id: this.diagnostics.traceId(),
+      });
       alert("Failed to save topic order. Please try again.");
     } finally {
       this.savingOrder = false;
